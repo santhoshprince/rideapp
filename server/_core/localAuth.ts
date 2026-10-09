@@ -30,7 +30,7 @@ function deriveKey(password: string, salt: string, length: number, cost: number,
 function sessionKey() {
   const secret = process.env.LOCAL_AUTH_SECRET;
   if (!secret || secret.length < 32) {
-    throw new Error("LOCAL_AUTH_SECRET must be at least 32 characters; set it in the local .env file.");
+    throw new Error("LOCAL_AUTH_SECRET must be at least 32 characters; set it in the deployment environment.");
   }
   return new TextEncoder().encode(secret);
 }

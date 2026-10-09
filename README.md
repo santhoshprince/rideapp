@@ -4,8 +4,20 @@ React / Express / tRPC / Drizzle starter, adapted from the Sandbox web-db-user t
 
 - `pnpm dev`: development server; honors `PORT` (default 3000).
 - `pnpm build` / `pnpm start`: build and serve `dist/index.js` and `dist/public/`.
+- `pnpm build:vercel`: build the frontend into Vercel's static `public/` output.
 - `pnpm db:migrate`: apply checked-in migrations. `pnpm db:push`: generate and apply new schema changes.
 - `pnpm check` / `pnpm test`: types and application tests.
+
+## Deploy to Vercel
+
+Import `santhoshprince/rideapp` into Vercel and keep the project root set to the repository root. The checked-in `vercel.json` builds the frontend as static assets and routes `/api/*` to the Express serverless function; other paths, including `/login`, load the single-page app.
+
+Vercel cannot connect to MySQL installed only on your personal computer. Before deploying, create a cloud-hosted MySQL database that accepts connections from Vercel, then add these environment variables to the Vercel project for Production (and Preview if needed):
+
+- `DATABASE_URL`: the cloud database connection URL.
+- `LOCAL_AUTH_SECRET`: a unique, randomly generated secret of at least 32 characters. Do not reuse the local development secret.
+
+Keep both values private. Apply the checked-in database migrations to the cloud database with `pnpm db:migrate` using its connection URL before testing registration and sign-in. The app's existing local MySQL database is separate; deploying does not copy its accounts or ride data.
 
 ## Local MySQL setup
 
