@@ -1,10 +1,10 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME } from "../shared/const.js";
 import { z } from "zod";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { createLocalSession, loginPasswordUser, registerPasswordUser, setLocalSessionCookie } from "./_core/localAuth";
-import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import * as db from "./db";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { createLocalSession, loginPasswordUser, registerPasswordUser, setLocalSessionCookie } from "./_core/localAuth.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import * as db from "./db.js";
 
 const rideId = z.string().uuid();
 

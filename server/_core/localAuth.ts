@@ -3,10 +3,10 @@ import { SignJWT, jwtVerify } from "jose";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const.js";
 import type { User } from "../../drizzle/schema";
-import * as db from "../db";
-import { getSessionCookieOptions } from "./cookies";
+import * as db from "../db.js";
+import { getSessionCookieOptions } from "./cookies.js";
 
 const PASSWORD_KEY_LENGTH = 64;
 const PASSWORD_COST = 16_384;

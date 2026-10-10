@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { InsertUser, InsertRide, rides, rideMessages, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { InsertUser, InsertRide, rides, rideMessages, users } from "../drizzle/schema.js";
+import { ENV } from "./_core/env.js";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 

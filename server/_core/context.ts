@@ -1,9 +1,9 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME } from "../../shared/const.js";
 import { parse as parseCookieHeader } from "cookie";
-import { getLocalSessionUser } from "./localAuth";
-import { sdk } from "./sdk";
+import { getLocalSessionUser } from "./localAuth.js";
+import { sdk } from "./sdk.js";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
