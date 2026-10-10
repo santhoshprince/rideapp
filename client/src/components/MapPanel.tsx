@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin, Navigation, Radio } from "lucide-react";
+import { LocateFixed, MapPin, Navigation } from "lucide-react";
 
 export interface RideMapData {
   id: string;
@@ -22,6 +22,10 @@ interface MapPanelProps {
   pickupCoordinates: { lat: number; lng: number } | null;
   ride: RideMapData | null;
   centerRequest: number;
+  deviceCoordinates: { lat: number; lng: number } | null;
+  locationTracking: boolean;
+  locationPending: boolean;
+  onToggleLocationTracking: () => void;
 }
 
 const pickupIcon = L.divIcon({
@@ -38,13 +42,31 @@ const driverIcon = L.divIcon({
   iconAnchor: [15, 15],
 });
 
+const deviceIcon = L.divIcon({
+  className: "osm-marker-icon",
+  html: '<span class="osm-marker osm-marker-device" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 11 6.7 6.8A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.8 1.3L19 11l1.5 1.5v5h-2v-1.5h-13v1.5h-2v-5L5 11Zm1.7-.5h10.6l-1.2-3H7.9l-1.2 3ZM6.5 14.2a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Zm11 0a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Z"/></svg></span>',
+  iconSize: [38, 38],
+  iconAnchor: [19, 19],
+});
+
 const defaultCenter: L.LatLngExpression = [20, 0];
 
-export default function MapPanel({ pickup, dropoff, pickupCoordinates, ride, centerRequest }: MapPanelProps) {
+export default function MapPanel({
+  pickup,
+  dropoff,
+  pickupCoordinates,
+  ride,
+  centerRequest,
+  deviceCoordinates,
+  locationTracking,
+  locationPending,
+  onToggleLocationTracking,
+}: MapPanelProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const pickupMarkerRef = useRef<L.Marker | null>(null);
   const driverMarkerRef = useRef<L.Marker | null>(null);
+  const deviceMarkerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
@@ -70,6 +92,7 @@ export default function MapPanel({ pickup, dropoff, pickupCoordinates, ride, cen
       mapRef.current = null;
       pickupMarkerRef.current = null;
       driverMarkerRef.current = null;
+      deviceMarkerRef.current = null;
     };
   }, []);
 
@@ -126,6 +149,26 @@ export default function MapPanel({ pickup, dropoff, pickupCoordinates, ride, cen
   ]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (deviceCoordinates) {
+      if (!deviceMarkerRef.current) {
+        deviceMarkerRef.current = L.marker(deviceCoordinates, {
+          icon: deviceIcon,
+          title: "This phone's GPS position (demo, not a taxi)",
+        })
+          .bindPopup("PHONE GPS · DEMO<br>This phone's location, not a taxi.")
+          .addTo(map);
+      } else {
+        deviceMarkerRef.current.setLatLng(deviceCoordinates);
+      }
+    } else if (deviceMarkerRef.current) {
+      deviceMarkerRef.current.remove();
+      deviceMarkerRef.current = null;
+    }
+  }, [deviceCoordinates?.lat, deviceCoordinates?.lng]);
+
+  useEffect(() => {
     if (centerRequest === 0 || !mapRef.current) return;
     const position = pickupCoordinates ?? (
       ride?.pickupLat != null && ride.pickupLng != null
@@ -141,6 +184,7 @@ export default function MapPanel({ pickup, dropoff, pickupCoordinates, ride, cen
   const hasDriverGps = Boolean(
     ride?.demoMode === 0 && ride.locationLat != null && ride.locationLng != null,
   );
+  const hasDeviceGps = Boolean(deviceCoordinates);
 
   return (
     <div className="map-shell live-map-shell">
@@ -152,18 +196,27 @@ export default function MapPanel({ pickup, dropoff, pickupCoordinates, ride, cen
         </div>
       )}
       <div className="map-topline">
-        <span className={`map-live-pill ${!hasDriverGps ? "is-demo" : ""}`}>
-          <span />{hasDriverGps ? "DRIVER GPS" : hasPickupGps ? "PICKUP GPS" : "OPENSTREETMAP"}
+        <span className={`map-live-pill ${!hasDriverGps || hasDeviceGps ? "is-demo" : ""}`}>
+          <span />{locationTracking ? "PHONE GPS · LIVE" : hasDeviceGps ? "PHONE GPS · LAST" : hasDriverGps ? "DRIVER GPS" : hasPickupGps ? "PICKUP GPS" : "OPENSTREETMAP"}
         </span>
         <span className="map-surface-label"><Navigation size={13} /> {dropoff.trim() ? "Map view" : "GPS map"}</span>
       </div>
       <div className="map-attribution">
-        {hasDriverGps ? "Driver GPS position" : hasPickupGps ? "Blue marker shows your pickup GPS" : "OpenStreetMap · GPS permission required"}
+        {hasDeviceGps ? "Phone GPS demo marker · not a taxi" : hasDriverGps ? "Driver GPS position" : hasPickupGps ? "Blue marker shows your pickup GPS" : "OpenStreetMap · GPS permission required"}
       </div>
       <div className="map-zoom-control">
-        <button type="button" aria-label="Map details" title="OpenStreetMap map">
-          <Radio size={14} />
+        <button
+          type="button"
+          className={`phone-gps-button ${locationTracking ? "is-tracking" : ""}`}
+          aria-label={locationTracking ? "Stop live phone GPS" : "Start live phone GPS"}
+          title={locationTracking ? "Stop live phone GPS" : "Show this phone moving on the map"}
+          disabled={locationPending && !locationTracking}
+          onClick={onToggleLocationTracking}
+        >
+          {locationPending ? <span className="mini-spinner" /> : <LocateFixed size={15} />}
+          {locationTracking ? "Stop phone GPS" : locationPending ? "Getting GPS…" : "Track this phone"}
         </button>
+        {(locationTracking || hasDeviceGps) && <span className="phone-gps-disclaimer">Demo only · not a taxi</span>}
       </div>
     </div>
   );

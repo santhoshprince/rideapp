@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownUp,
   ArrowLeft,
@@ -53,9 +53,13 @@ export default function Home() {
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
   const [pickupCoordinates, setPickupCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+  const [deviceCoordinates, setDeviceCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationTracking, setLocationTracking] = useState(false);
   const [locationPending, setLocationPending] = useState(false);
   const [mapCenterRequest, setMapCenterRequest] = useState(0);
   const locationRequestRef = useRef(0);
+  const locationWatchRef = useRef<number | null>(null);
+  const locationInitializedRef = useRef(false);
   const [selectedRideId, setSelectedRideId] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
 
@@ -101,26 +105,58 @@ export default function Home() {
     onError: error => toast.error(error.message || "Could not sign out"),
   });
 
+  function stopLiveLocation() {
+    locationRequestRef.current += 1;
+    if (locationWatchRef.current !== null) {
+      navigator.geolocation?.clearWatch(locationWatchRef.current);
+      locationWatchRef.current = null;
+    }
+    locationInitializedRef.current = false;
+    setLocationTracking(false);
+    setLocationPending(false);
+  }
+
+  useEffect(() => () => {
+    if (locationWatchRef.current !== null) {
+      navigator.geolocation?.clearWatch(locationWatchRef.current);
+    }
+  }, []);
+
   function useCurrentLocation() {
+    if (locationWatchRef.current !== null) {
+      stopLiveLocation();
+      toast.success("Live phone GPS stopped");
+      return;
+    }
     if (!navigator.geolocation) {
       toast.error("Location access is not available in this browser");
       return;
     }
     const requestId = ++locationRequestRef.current;
     setLocationPending(true);
-    navigator.geolocation.getCurrentPosition(
+    locationInitializedRef.current = false;
+    const watchId = navigator.geolocation.watchPosition(
       position => {
         if (requestId !== locationRequestRef.current) return;
         const coordinates = { lat: position.coords.latitude, lng: position.coords.longitude };
-        const coordinateLabel = `Current location (${coordinates.lat.toFixed(5)}, ${coordinates.lng.toFixed(5)})`;
-        setPickup(coordinateLabel);
-        setPickupCoordinates(coordinates);
-        setLocationPending(false);
-        setMapCenterRequest(value => value + 1);
-        toast.success(`Pickup GPS set (accuracy about ${Math.round(position.coords.accuracy)} m)`);
+        setDeviceCoordinates(coordinates);
+        if (!locationInitializedRef.current) {
+          locationInitializedRef.current = true;
+          setPickup(`Current location (${coordinates.lat.toFixed(5)}, ${coordinates.lng.toFixed(5)})`);
+          setPickupCoordinates(coordinates);
+          setLocationPending(false);
+          setMapCenterRequest(value => value + 1);
+          toast.success(`Live phone GPS started (accuracy about ${Math.round(position.coords.accuracy)} m)`);
+        }
       },
       error => {
         if (requestId !== locationRequestRef.current) return;
+        if (locationWatchRef.current !== null) {
+          navigator.geolocation?.clearWatch(locationWatchRef.current);
+          locationWatchRef.current = null;
+        }
+        locationInitializedRef.current = false;
+        setLocationTracking(false);
         setLocationPending(false);
         const message = error.code === error.PERMISSION_DENIED
           ? "Location permission is blocked. Allow location access in your browser, then try again."
@@ -129,8 +165,10 @@ export default function Home() {
             : "Your location is unavailable. Check that device location is enabled or enter an address.";
         toast.error(message);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
+    locationWatchRef.current = watchId;
+    setLocationTracking(true);
   }
 
   function submitRide(event: React.FormEvent<HTMLFormElement>) {
@@ -189,14 +227,14 @@ export default function Home() {
                   <div className="field-stack">
                     <label className="location-field pickup-field">
                       <span className="field-icon pickup-dot"><MapPin size={16} /></span>
-                      <span className="field-copy"><small>PICKUP</small><input value={pickup} onChange={event => { locationRequestRef.current += 1; setLocationPending(false); setPickup(event.target.value); setPickupCoordinates(null); }} placeholder="Enter pickup address" autoComplete="street-address" /></span>
+                      <span className="field-copy"><small>PICKUP</small><input value={pickup} onChange={event => { stopLiveLocation(); setPickup(event.target.value); setPickupCoordinates(null); }} placeholder="Enter pickup address" autoComplete="street-address" /></span>
                       <button className="field-locate" type="button" onClick={useCurrentLocation} disabled={locationPending} title="Use my current location" aria-label="Use my current location">{locationPending ? <span className="mini-spinner" /> : <LocateFixed size={17} />}</button>
                     </label>
                     <div className="field-connector"><span /><span /><span /></div>
                     <label className="location-field dropoff-field">
                       <span className="field-icon destination-dot"><MapPin size={16} /></span>
                       <span className="field-copy"><small>DROP-OFF</small><input value={dropoff} onChange={event => setDropoff(event.target.value)} placeholder="Where are you headed?" autoComplete="street-address" /></span>
-                      <button className="field-locate" type="button" onClick={() => { locationRequestRef.current += 1; setLocationPending(false); setPickup(dropoff); setDropoff(pickup); setPickupCoordinates(null); }} title="Swap locations" aria-label="Swap pickup and drop-off"><ArrowDownUp size={16} /></button>
+                      <button className="field-locate" type="button" onClick={() => { stopLiveLocation(); setPickup(dropoff); setDropoff(pickup); setPickupCoordinates(null); }} title="Swap locations" aria-label="Swap pickup and drop-off"><ArrowDownUp size={16} /></button>
                     </label>
                   </div>
                   <div className="booking-divider" />
@@ -273,15 +311,19 @@ export default function Home() {
             pickupCoordinates={activeRide?.pickupLat !== null && activeRide?.pickupLat !== undefined && activeRide?.pickupLng !== null && activeRide?.pickupLng !== undefined ? { lat: activeRide.pickupLat, lng: activeRide.pickupLng } : pickupCoordinates}
             ride={(activeRide as RideMapData | null) ?? null}
             centerRequest={mapCenterRequest}
+            deviceCoordinates={deviceCoordinates}
+            locationTracking={locationTracking}
+            locationPending={locationPending}
+            onToggleLocationTracking={useCurrentLocation}
           />
           <div className="route-summary">
             <div className="summary-location"><span className="summary-point summary-origin" /><span><small>PICKUP</small><strong>{currentPickup || "Set your pickup"}</strong></span></div>
             <div className="summary-route-line"><span /><ArrowRight size={14} /><span /></div>
             <div className="summary-location"><span className="summary-point summary-destination" /><span><small>DROP-OFF</small><strong>{currentDropoff || "Add a destination"}</strong></span></div>
             <div className="summary-divider" />
-            <div className="map-summary-note"><Clock3 size={15} /><span>{activeRide ? (actualGps ? "Location updates refresh automatically" : "Waiting for a real driver GPS feed") : "Use GPS to mark your pickup; live driver tracking needs a driver feed"}</span></div>
+            <div className="map-summary-note"><Clock3 size={15} /><span>{locationTracking ? "Live marker follows this phone; it is not a taxi" : deviceCoordinates ? "Showing this phone's last GPS position · demo only" : activeRide ? (actualGps ? "Location updates refresh automatically" : "Waiting for a real driver GPS feed") : "Tap Track this phone to see your GPS move on the map"}</span></div>
           </div>
-          <div className="map-bottom-strip"><span><span className="bottom-status-dot" /> SECURE SESSION</span><span>GPS is requested only when you tap the location button</span><span>Map tiles © OpenStreetMap contributors</span></div>
+          <div className="map-bottom-strip"><span><span className="bottom-status-dot" /> SECURE SESSION</span><span>Phone GPS starts only when you tap Track this phone</span><span>Map tiles © OpenStreetMap contributors</span></div>
         </section>
       </main>
     </div>
