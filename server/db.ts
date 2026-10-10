@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { InsertUser, InsertRide, rides, rideMessages, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -10,7 +11,12 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const client = postgres(process.env.DATABASE_URL, {
+        ssl: "require",
+        max: 1,
+        prepare: false,
+      });
+      _db = drizzle(client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -33,7 +39,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   try {
     const values: InsertUser = { openId: user.openId };
-    const updateSet: Record<string, unknown> = {};
+    const updateSet: Partial<InsertUser> = {};
     const textFields = ["name", "email", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
     const assignNullable = (field: TextField) => {
@@ -48,6 +54,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.lastSignedIn = user.lastSignedIn;
       updateSet.lastSignedIn = user.lastSignedIn;
     }
+    updateSet.updatedAt = new Date();
     if (user.role !== undefined) {
       values.role = user.role;
       updateSet.role = user.role;
@@ -57,7 +64,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     }
     if (!values.lastSignedIn) values.lastSignedIn = new Date();
     if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
+      set: updateSet,
+    });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -146,7 +156,7 @@ export async function cancelRide(id: string, riderKey: string) {
   const ride = await getRideById(id, riderKey);
   if (!ride) return null;
   if (["requested", "assigned", "arriving"].includes(ride.status)) {
-    await db.update(rides).set({ status: "cancelled" }).where(and(eq(rides.id, id), eq(rides.riderKey, riderKey)));
+    await db.update(rides).set({ status: "cancelled", updatedAt: new Date() }).where(and(eq(rides.id, id), eq(rides.riderKey, riderKey)));
     await db.insert(rideMessages).values({
       rideId: id,
       sender: "Ride service",
@@ -191,6 +201,7 @@ export async function updateRideLocation(input: { rideId: string; lat: number; l
     locationLat: input.lat,
     locationLng: input.lng,
     locationUpdatedAt: new Date(),
+    updatedAt: new Date(),
     demoMode: 0,
   }).where(eq(rides.id, input.rideId));
   return true;

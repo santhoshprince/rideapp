@@ -8,34 +8,26 @@ React / Express / tRPC / Drizzle starter, adapted from the Sandbox web-db-user t
 - `pnpm db:migrate`: apply checked-in migrations. `pnpm db:push`: generate and apply new schema changes.
 - `pnpm check` / `pnpm test`: types and application tests.
 
-## Deploy to Vercel
+## Deploy to Vercel with Supabase
 
-Import `santhoshprince/rideapp` into Vercel and keep the project root set to the repository root. The checked-in `vercel.json` builds the frontend as static assets and routes `/api/*` to the Express serverless function; other paths, including `/login`, load the single-page app.
+Create a Supabase project on the Free plan, then import `santhoshprince/rideapp` into Vercel and keep the project root set to the repository root. The checked-in `vercel.json` builds the frontend as static assets and routes `/api/*` to the Express serverless function; other paths, including `/login`, load the single-page app.
 
-Vercel cannot connect to MySQL installed only on your personal computer. Before deploying, create a cloud-hosted MySQL database that accepts connections from Vercel, then add these environment variables to the Vercel project for Production (and Preview if needed):
+In Supabase, open **Connect** and copy the **Transaction pooler** URI for serverless use. Add these environment variables to the Vercel project for Production (and Preview if needed):
 
-- `DATABASE_URL`: the cloud database connection URL.
+- `DATABASE_URL`: the Supabase PostgreSQL transaction-pooler URL. Keep the `sslmode=require` setting and URL-encode special characters in the password.
 - `LOCAL_AUTH_SECRET`: a unique, randomly generated secret of at least 32 characters. Do not reuse the local development secret.
 
-Keep both values private. Apply the checked-in database migrations to the cloud database with `pnpm db:migrate` using its connection URL before testing registration and sign-in. The app's existing local MySQL database is separate; deploying does not copy its accounts or ride data.
+Keep both values private. Run `pnpm db:migrate` with the Supabase connection URL before testing registration and sign-in. Vercel cannot connect to a database installed only on your computer. Supabase Free currently includes 500 MB and pauses projects after a week of inactivity. Existing accounts and rides in a local MySQL database are not copied to Supabase.
 
-## Local MySQL setup
+## Local database setup
 
-Create the database and a dedicated application user in the MySQL client:
+Copy `.env.example` to `.env` and set `DATABASE_URL` to a PostgreSQL connection URL. `.env` is ignored by Git.
 
-```sql
-CREATE DATABASE rideapp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'rideapp_app'@'localhost' IDENTIFIED BY 'your-long-alphanumeric-password';
-GRANT ALL PRIVILEGES ON rideapp.* TO 'rideapp_app'@'localhost';
-```
+Set `LOCAL_AUTH_SECRET` in `.env` to a unique random value of at least 32 characters; it signs login sessions. Do not share or commit this secret.
 
-Copy `.env.example` to `.env` and set `DATABASE_URL` to use that same password. Keep the password long and alphanumeric, or URL-encode special characters in the connection URL. `.env` is ignored by Git.
+Email/password sign-in requires the latest schema. Run `pnpm db:migrate` after setting the database URL. Accounts can be created from the app's login screen; ride and message data is scoped to the signed-in account.
 
-Set `LOCAL_AUTH_SECRET` in `.env` to a unique random value of at least 32 characters; it signs local login sessions. Do not share or commit this secret.
-
-Local email/password sign-in requires the latest schema. Run `pnpm db:migrate` after setting the database URL. Accounts can be created from the app's login screen; ride and message data is scoped to the signed-in account.
-
-Apply the schema with `pnpm db:migrate`. On Windows PowerShell, start the development server with:
+On Windows PowerShell, start the development server with:
 
 ```powershell
 $env:NODE_ENV = "development"

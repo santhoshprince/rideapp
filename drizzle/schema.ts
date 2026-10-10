@@ -1,42 +1,47 @@
-import { int, double, mysqlEnum, mysqlTable, text, timestamp, varchar, index } from "drizzle-orm/mysql-core";
+import { doublePrecision, integer, pgEnum, pgTable, serial, text, timestamp, varchar, index } from "drizzle-orm/pg-core";
 
 /** User accounts for local password auth and the optional Manus OAuth flow. */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
+export const userRole = pgEnum("role", ["user", "admin"]);
+export const rideStatus = pgEnum("status", ["requested", "assigned", "arriving", "in_progress", "completed", "cancelled"]);
+
+const timestampConfig = { withTimezone: true, mode: "date" } as const;
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }).unique(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  role: userRole("role").default("user").notNull(),
+  createdAt: timestamp("createdAt", timestampConfig).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", timestampConfig).defaultNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn", timestampConfig).defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /** Rider-key scoped demo bookings. Real dispatch integrations can attach a provider ID later. */
-export const rides = mysqlTable(
+export const rides = pgTable(
   "rides",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     riderKey: varchar("riderKey", { length: 64 }).notNull(),
     pickup: varchar("pickup", { length: 500 }).notNull(),
     dropoff: varchar("dropoff", { length: 500 }).notNull(),
-    pickupLat: double("pickupLat"),
-    pickupLng: double("pickupLng"),
-    status: mysqlEnum("status", ["requested", "assigned", "arriving", "in_progress", "completed", "cancelled"]).default("requested").notNull(),
-    demoMode: int("demoMode").default(1).notNull(),
+    pickupLat: doublePrecision("pickupLat"),
+    pickupLng: doublePrecision("pickupLng"),
+    status: rideStatus("status").default("requested").notNull(),
+    demoMode: integer("demoMode").default(1).notNull(),
     driverName: varchar("driverName", { length: 120 }),
     vehicleName: varchar("vehicleName", { length: 120 }),
     vehiclePlate: varchar("vehiclePlate", { length: 32 }),
-    locationLat: double("locationLat"),
-    locationLng: double("locationLng"),
-    locationUpdatedAt: timestamp("locationUpdatedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    locationLat: doublePrecision("locationLat"),
+    locationLng: doublePrecision("locationLng"),
+    locationUpdatedAt: timestamp("locationUpdatedAt", timestampConfig),
+    createdAt: timestamp("createdAt", timestampConfig).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", timestampConfig).defaultNow().notNull(),
   },
   table => ({ riderCreatedIdx: index("rides_rider_created_idx").on(table.riderKey, table.createdAt) }),
 );
@@ -44,15 +49,15 @@ export const rides = mysqlTable(
 export type Ride = typeof rides.$inferSelect;
 export type InsertRide = typeof rides.$inferInsert;
 
-export const rideMessages = mysqlTable(
+export const rideMessages = pgTable(
   "rideMessages",
   {
-    id: int("id").autoincrement().primaryKey(),
+    id: serial("id").primaryKey(),
     rideId: varchar("rideId", { length: 36 }).notNull(),
     sender: varchar("sender", { length: 120 }).notNull(),
     body: text("body").notNull(),
-    isRead: int("isRead").default(0).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    isRead: integer("isRead").default(0).notNull(),
+    createdAt: timestamp("createdAt", timestampConfig).defaultNow().notNull(),
   },
   table => ({ rideCreatedIdx: index("ride_messages_ride_created_idx").on(table.rideId, table.createdAt) }),
 );
